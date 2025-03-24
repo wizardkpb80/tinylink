@@ -6,19 +6,49 @@ from sqlalchemy import update
 from datetime import datetime, timedelta
 from src.tinylink.models import linkdata
 from sqlalchemy.future import select
-
 from src.tinylink.router import redis_client
+from src.config import DEACTIVATION_DAYS
+
 
 router = APIRouter(prefix="/task")
 
-EXPIRATION_DAYS = 30
-
-
 @router.post("/cleanup")
 async def cleanup_unused_links():
-    """Запускает фоновую задачу для удаления неиспользуемых ссылок."""
-    #delete_unused_links.delay()  # Отправляем задачу Celery в очередь
+    asyncio.create_task(periodic_cleanup())
     return {"message": "Cleanup task started."}
+
+async def periodic_cleanup():
+    """
+    Периодически запускает delete_unused_links раз в сутки.
+    """
+    while True:
+        await delete_unused_links()  # ✅ Теперь вызываем корректно
+        await asyncio.sleep(24 * 60 * 60)  # Запускать каждые 24 часа
+
+async def delete_unused_links():
+    """
+    Удаляет ссылки, которые не использовались в течение EXPIRATION_DAYS.
+    """
+    session = await get_session()
+    async with session:
+        threshold_date = datetime.utcnow() - timedelta(days=int(DEACTIVATION_DAYS))
+
+        # Найти ссылки, которые не использовались слишком долго
+        result = await session.execute(
+            select(linkdata).where(
+                linkdata.c.last_used_at < threshold_date, linkdata.c.is_active == True
+            )
+        )
+        unused_links = result.fetchall()
+        if unused_links:
+            stmt = (
+                update(linkdata)
+                .where(linkdata.c.last_used_at < threshold_date, linkdata.c.is_active == True)
+                .values(is_active=False)
+            )
+            await session.execute(stmt)
+
+        await session.commit()
 
 @router.on_event("startup")
 async def start_background_task():
@@ -27,7 +57,7 @@ async def start_background_task():
     """
     session = await get_async_session().__anext__()  # Get DB session
     asyncio.create_task(sync_usage_data(session))  # Run in the background
-    asyncio.create_task(periodic_delete_unused_links(session))  # Run daily cleanup
+    asyncio.create_task(periodic_delete_unused_links())  # Run daily cleanup
 
 @router.get("/trigger-sync/")
 async def trigger_sync_task(background_tasks: BackgroundTasks, session: AsyncSession = Depends(get_async_session)):
@@ -49,7 +79,7 @@ async def sync_usage_data(session: AsyncSession):
             last_used_at = redis_client.get(f"last_used_at:{short_code}")
             if last_used_at:
                 last_used_at = datetime.fromisoformat(last_used_at)
-                if current_time - last_used_at <= timedelta(seconds=60):
+                if current_time - last_used_at <= timedelta(seconds=10):
                     # Update database
                     stmt = (
                         update(linkdata)
@@ -61,10 +91,10 @@ async def sync_usage_data(session: AsyncSession):
                     )
                     await session.execute(stmt)
         await session.commit()
-        await asyncio.sleep(60)  # Wait 1 minute before the next update
+        await asyncio.sleep(10)  # Wait 1 minute before the next update
 
 
-async def periodic_delete_unused_links(session2: AsyncSession):
+async def periodic_delete_unused_links():
     """
     Periodically runs the delete_unused_links task once per day.
     """
@@ -75,7 +105,7 @@ async def periodic_delete_unused_links(session2: AsyncSession):
             """
             Deletes links that have not been used for more than DEACTIVATION_DAYS.
             """
-            threshold_date = datetime.utcnow() - timedelta(days=EXPIRATION_DAYS)
+            threshold_date = datetime.utcnow() - timedelta(days=int(DEACTIVATION_DAYS))
             # Find unused links
             result = await session.execute(
                 select(linkdata).where(
@@ -113,7 +143,7 @@ async def periodic_delete_unused_links(session2: AsyncSession):
             result = await session.execute(
                 select(linkdata).where(
                     linkdata.c.created < datetime.utcnow(), linkdata.c.is_active == True,
-                    linkdata.c.last_used_at == None, linkdata.c.expires_at == None
+                    linkdata.c.last_used_at is None, linkdata.c.expires_at is None
                 )
             )
 
@@ -123,7 +153,7 @@ async def periodic_delete_unused_links(session2: AsyncSession):
                 stmt = (
                     update(linkdata)
                     .where(linkdata.c.created < threshold_date, linkdata.c.is_active == True,
-                    linkdata.c.last_used_at == None, linkdata.c.expires_at == None)
+                           linkdata.c.last_used_at is None, linkdata.c.expires_at is None)
                     .values(is_active=False)
                 )
                 await session.execute(stmt)

@@ -1,15 +1,11 @@
 import redis
-import random
-import string
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import insert, delete, update, text
-from typing import Optional
 from datetime import datetime
 from typing import List, Optional
-
 from src.auth.users import current_active_user
 from src.database import get_async_session
 from src.tinylink.schemas import LinkResponse, LinkCreate, LinkUpdate
@@ -21,14 +17,14 @@ from datetime import timedelta
 from src.config import  DEACTIVATION_DAYS
 from sqlalchemy import func
 
+
 # Настройка Redis
-redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
+redis_client = redis.StrictRedis(host='redis_app', port=6379, db=0, decode_responses=True)
 
 router = APIRouter(
     prefix="/tinylink",
     tags=["tinylink"]
 )
-
 
 @router.post("/links/shorten", response_model=LinkResponse)
 async def shorten_link(
@@ -110,7 +106,6 @@ async def redirect_to_original(short_code: str, session: AsyncSession = Depends(
             )
             db_usage_count = result.scalar() or 0
             redis_client.zadd("usage_count", {short_code: db_usage_count})
-            usage_count = db_usage_count
 
         redis_client.zincrby("usage_count", 1, short_code)
 
@@ -132,11 +127,9 @@ async def redirect_to_original(short_code: str, session: AsyncSession = Depends(
     if not link.is_active:
         raise HTTPException(status_code=403, detail="Link is deactivated due to inactivity")
 
-    # **Update `usage_count` and `last_used_at`**
     new_usage_count = link.usage_count + 1
     last_used_at = datetime.utcnow()
 
-    # **Update database**
     stmt = (
         update(linkdata)
         .where(linkdata.c.short_code == short_code, linkdata.c.is_active == True)
@@ -148,7 +141,6 @@ async def redirect_to_original(short_code: str, session: AsyncSession = Depends(
     await session.execute(stmt)
     await session.commit()
 
-    # **Update Redis**
     redis_client.setex(f"link:{short_code}", 3600, link.original_url)  # Cache URL for 1 hour
     redis_client.zadd("usage_count", {short_code: new_usage_count})  # Store updated count in Redis
     redis_client.set(f"last_used_at:{short_code}", last_used_at.isoformat())  # Store last_used_at in Redis
@@ -322,7 +314,7 @@ async def deactivate_unused_links(
             status_code=403, detail="Only superusers can deactivate links"
         )
 
-    threshold_date = datetime.now() - timedelta(days=DEACTIVATION_DAYS)
+    threshold_date = datetime.now() - timedelta(days=int(DEACTIVATION_DAYS))
     # Find links that haven't been used for N days and are still active
     result = await session.execute(
         select(linkdata.c.short_code, linkdata.c.original_url).where(

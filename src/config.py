@@ -11,7 +11,6 @@ DB_PORT = os.getenv("DB_PORT")
 DB_NAME = os.getenv("DB_NAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_USER = os.getenv("SMTP_USER")
-SECRET = "SECRET"
-DEACTIVATION_DAYS = 30
-# import os, base64
-# print(base64.urlsafe_b64encode(os.urandom(32)).decode())
+SECRET =  os.getenv("SECRET")
+DEACTIVATION_DAYS = os.getenv("DEACTIVATION_DAYS")
+ALGORITHM = os.getenv("ALGORITHM")

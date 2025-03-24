@@ -3,6 +3,7 @@ from typing import Optional
 import uuid
 from datetime import datetime
 
+
 class LinkCreate(BaseModel):
     original_url: str
     custom_alias: Optional[str] = None  # Добавляем поддержку кастомного alias

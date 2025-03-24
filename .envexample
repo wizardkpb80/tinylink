@@ -1,0 +1,8 @@
+DB_USER=postgres
+DB_PASS=postgres
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=tinylink
+SECRET=my_super_secret_key
+DEACTIVATION_DAYS=30
+ALGORITHM=HS256

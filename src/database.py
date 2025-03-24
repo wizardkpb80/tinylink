@@ -1,9 +1,9 @@
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from src.config import DB_HOST, DB_NAME, DB_PASS, DB_PORT, DB_USER
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
+
 
 DATABASE_URL = f"postgresql+asyncpg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
@@ -23,7 +23,7 @@ AsyncSessionLocal = sessionmaker(
     bind=engine, class_=AsyncSession, expire_on_commit=False
 )
 
-# Assuming you have already defined the AsyncSessionLocal somewhere in your code.
+
 async def get_session():
     # Return the session object directly after awaiting the context manager
     async with AsyncSessionLocal() as session:
