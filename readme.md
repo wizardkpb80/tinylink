@@ -3,10 +3,33 @@ run: docker build -t my-python-app .
 ![local_deploy](https://github.com/user-attachments/assets/b91b9cc2-40cc-4ddc-8b27-8c174ce59f62)
 
 полное видео в папке docs
-документация по работе сервиса там же
 
 
-Краткое описание работы кода:
+Скриншот с БД
+
+![image](https://github.com/user-attachments/assets/e315b009-3243-4d3f-b92e-5399922bd163)
+
+![image](https://github.com/user-attachments/assets/b8b214b2-e932-4486-b11a-ab8fef05fd92)
+
+![image](https://github.com/user-attachments/assets/8b630679-df60-4b2c-a021-c8305033ce54)
+
+Генерацию ссылок отдал на откуп БД через фукцию, так же можно прилепить ещё триггер на Linkdata таблицу для сбора полной статистики 
+
+Проект взял из лекции и доработал, по этому описываю доработки:
+
+## 1.	User.registered_at пише дату создания
+## 2.	Ручка «check-route» это работа ручек unprotected-route+protected-route
+
+## Теперь по каталогам auth
+	auth_bearer.py, auth_handler.py legacy out of project
+	доработал users.py
+## task:
+	delete_unused_links, проверил как работает celery
+	sync_usage_data – redis собирает инфу о переходах+последнее использование, а тут мы каждую минуту обновляем данные в БД, чтобы не нагружать БД 
+	periodic_delete_unused_links по разным условия просроченным датам деактивирует ссылки, можно и удалять но оставил чтобы данных было поболее
+
+
+# Краткое описание работы кода:
 
 # tiny/router.py (Основной обработчик ссылок)
 Этот модуль реализует API для управления короткими ссылками:
