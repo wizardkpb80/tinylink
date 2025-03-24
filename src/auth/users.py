@@ -90,7 +90,6 @@ def verify_token(token: str):
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     user = verify_token(token)  # Функция для проверки токена
-    print(user)
     if user is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return user
@@ -99,7 +98,6 @@ def check_user(user: User = Depends(current_active_user)):
     return user
 
 def get_current_user_optional() -> User:
-    print("123")
     try:
         user = Depends(current_active_user)
         return user  # Попытка получить пользователя
@@ -108,16 +106,12 @@ def get_current_user_optional() -> User:
 
 def get_current_superuser(token: str = Depends(oauth2_scheme)) -> User:
     """Проверяет токен и возвращает суперпользователя, если он есть."""
-    print(token)
     if not token:
         return User(email="anonym")  # Если токена нет, аноним
 
     try:
-        print("123")
         payload = jwt.decode(token, SECRET, algorithms=[ALGORITHM])
-        print(payload)
         user_email = payload.get("sub")
-        print(user_email)
         is_superuser = payload.get("is_superuser", False)  # Проверяем флаг суперпользователя
 
         if not user_email:

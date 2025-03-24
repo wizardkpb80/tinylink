@@ -22,7 +22,7 @@ from src.config import  DEACTIVATION_DAYS
 from sqlalchemy import func
 
 # Настройка Redis
-redis_client = redis.StrictRedis(host='redis_app', port=6379, db=0, decode_responses=True)
+redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 
 router = APIRouter(
     prefix="/tinylink",
@@ -46,7 +46,7 @@ async def shorten_link(
 
     # Check if the original URL already exists in the database
     result = await session.execute(
-        select(linkdata).where(linkdata.c.original_url == link.original_url)
+        select(linkdata).where(linkdata.c.original_url == link.original_url, linkdata.c.is_active == True)
     )
     existing_link = result.fetchone()
 
@@ -106,7 +106,7 @@ async def redirect_to_original(short_code: str, session: AsyncSession = Depends(
         if usage_count is None:
             # Fetch from DB if not in Redis
             result = await session.execute(
-                select(linkdata.c.usage_count).where(func.lower(linkdata.c.short_code) == func.lower(short_code))
+                select(linkdata.c.usage_count).where(func.lower(linkdata.c.short_code) == func.lower(short_code), linkdata.c.is_active == True)
             )
             db_usage_count = result.scalar() or 0
             redis_client.zadd("usage_count", {short_code: db_usage_count})
@@ -121,7 +121,7 @@ async def redirect_to_original(short_code: str, session: AsyncSession = Depends(
 
     # Fetch link from the database
     result = await session.execute(
-        select(linkdata).where(func.lower(linkdata.c.short_code) == func.lower(short_code))
+        select(linkdata).where(func.lower(linkdata.c.short_code) == func.lower(short_code), linkdata.c.is_active == True)
     )
     link = result.fetchone()
 
@@ -139,7 +139,7 @@ async def redirect_to_original(short_code: str, session: AsyncSession = Depends(
     # **Update database**
     stmt = (
         update(linkdata)
-        .where(linkdata.c.short_code == short_code)
+        .where(linkdata.c.short_code == short_code, linkdata.c.is_active == True)
         .values(
             usage_count=new_usage_count,  # Increment usage_count
             last_used_at=last_used_at,  # Update last_used_at
@@ -173,7 +173,7 @@ async def delete_link(
     if link.user_id != user.id:
         raise HTTPException(status_code=403, detail="You are not the owner of this link")
 
-    await session.execute(delete(linkdata).where(linkdata.c.short_code == short_code))
+    await session.execute(delete(linkdata).where(linkdata.c.short_code == short_code, linkdata.c.is_active == True))
     await session.commit()
 
     redis_client.delete(f"link:{short_code}")
@@ -190,7 +190,7 @@ async def update_link(
         user: User = Depends(current_active_user)
 ):
     result = await session.execute(
-        select(linkdata).where(linkdata.c.short_code == short_code)
+        select(linkdata).where(linkdata.c.short_code == short_code, linkdata.c.is_active == True)
     )
     link = result.fetchone()
 
@@ -209,7 +209,7 @@ async def update_link(
             link_update.expires_at = datetime.strptime(link_update.expires_at, '%Y-%m-%d %H:%M:%S.%f')
         update_values["expires_at"] = link_update.expires_at
 
-    stmt = update(linkdata).where(linkdata.c.short_code == short_code).values(update_values)
+    stmt = update(linkdata).where(linkdata.c.short_code == short_code, linkdata.c.is_active == True).values(update_values)
     await session.execute(stmt)
     await session.commit()
 
@@ -238,7 +238,7 @@ async def link_stats(
     last_used_at = redis_client.get(f"last_used_at:{short_code}")
     if clicks is None:
         result = await session.execute(
-            select(linkdata).where(linkdata.c.short_code == short_code)
+            select(linkdata).where(linkdata.c.short_code == short_code, linkdata.c.is_active == True)
         )
         link = result.fetchone()
         clicks = link.usage_count
@@ -266,7 +266,7 @@ async def search_links_by_original_url(
 
     # Ищем ссылки в базе
     result = await session.execute(
-        select(linkdata).where(linkdata.c.original_url == decoded_url)
+        select(linkdata).where(linkdata.c.original_url == decoded_url, linkdata.c.is_active == True)
     )
     links = result.fetchall()
 
@@ -289,7 +289,7 @@ async def get_expired_links(session: AsyncSession = Depends(get_async_session)):
 
     # Запрос всех ссылок, срок действия которых истек
     result = await session.execute(
-        select(linkdata).where(linkdata.c.expires_at < now)
+        select(linkdata).where(linkdata.c.expires_at < now, linkdata.c.is_active == True)
     )
     expired_links = result.fetchall()
 

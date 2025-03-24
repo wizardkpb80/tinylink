@@ -49,7 +49,7 @@ async def sync_usage_data(session: AsyncSession):
             last_used_at = redis_client.get(f"last_used_at:{short_code}")
             if last_used_at:
                 last_used_at = datetime.fromisoformat(last_used_at)
-                if current_time - last_used_at <= timedelta(seconds=10):
+                if current_time - last_used_at <= timedelta(seconds=60):
                     # Update database
                     stmt = (
                         update(linkdata)
@@ -61,7 +61,7 @@ async def sync_usage_data(session: AsyncSession):
                     )
                     await session.execute(stmt)
         await session.commit()
-        await asyncio.sleep(10)  # Wait 1 minute before the next update
+        await asyncio.sleep(60)  # Wait 1 minute before the next update
 
 
 async def periodic_delete_unused_links(session2: AsyncSession):
